@@ -73,6 +73,33 @@ app.get('/api/metadata/satellites/:noradId', (req, res) => {
   res.json({ data: metadata || null, serverTimeUtc: new Date().toISOString() });
 });
 
+// Update satellite metadata (for SME content)
+app.put('/api/metadata/satellites/:noradId', (req, res) => {
+  const noradId = parseInt(req.params.noradId);
+  const { summary, owner, mission_type, status, fact_json } = req.body;
+  
+  // Check satellite exists
+  const satellite = db.prepare('SELECT norad_id FROM satellites WHERE norad_id = ?').get(noradId);
+  if (!satellite) {
+    return res.status(404).json({ error: { code: 'NOT_FOUND', message: 'Satellite not found' } });
+  }
+  
+  db.prepare(`
+    INSERT INTO satellite_metadata (norad_id, summary, owner, mission_type, status, fact_json, last_reviewed_at)
+    VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(norad_id) DO UPDATE SET
+      summary = excluded.summary,
+      owner = excluded.owner,
+      mission_type = excluded.mission_type,
+      status = excluded.status,
+      fact_json = excluded.fact_json,
+      last_reviewed_at = datetime('now')
+  `).run(noradId, summary || null, owner || null, mission_type || null, status || null, fact_json ? JSON.stringify(fact_json) : null);
+  
+  const updated = db.prepare('SELECT * FROM satellite_metadata WHERE norad_id = ?').get(noradId);
+  res.json({ data: updated, serverTimeUtc: new Date().toISOString() });
+});
+
 // Get celestial bodies
 app.get('/api/solar/bodies', (req, res) => {
   const bodies = db.prepare('SELECT * FROM celestial_bodies').all();
