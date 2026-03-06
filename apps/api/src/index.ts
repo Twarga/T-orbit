@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import db, { initializeDatabase } from './db/index.js';
+import './jobs/scheduler.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -10,7 +11,22 @@ app.use(express.json());
 
 // Health check
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'ok', timestamp: new Date().toISOString() });
+  const tleSync = db.prepare(`
+    SELECT * FROM sync_runs WHERE source_name = 'celestrak' ORDER BY started_at DESC LIMIT 1
+  `).get();
+  
+  const ephSync = db.prepare(`
+    SELECT * FROM sync_runs WHERE source_name = 'jpl' ORDER BY started_at DESC LIMIT 1
+  `).get();
+  
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    lastSync: {
+      tle: tleSync,
+      ephemeris: ephSync
+    }
+  });
 });
 
 // Get active satellites
@@ -65,27 +81,61 @@ app.get('/api/solar/bodies', (req, res) => {
 
 // Get ephemeris positions
 app.get('/api/solar/positions', (req, res) => {
-  const { at } = req.query;
-  const timestamp = at || new Date().toISOString();
-  
-  // Get closest snapshot for each body
   const positions = db.prepare(`
-    SELECT e.* FROM ephemeris_snapshots e
-    WHERE e.body_code = ?
-    AND e.timestamp_utc <= ?
-    ORDER BY e.timestamp_utc DESC
-    LIMIT 1
-  `).all(timestamp);
+    SELECT e.body_code, e.timestamp_utc, e.x_km, e.y_km, e.z_km
+    FROM ephemeris_snapshots e
+    INNER JOIN (
+      SELECT body_code, MAX(timestamp_utc) as max_time
+      FROM ephemeris_snapshots
+      GROUP BY body_code
+    ) latest ON e.body_code = latest.body_code AND e.timestamp_utc = latest.max_time
+  `).all();
   
   res.json({ data: positions, serverTimeUtc: new Date().toISOString() });
 });
 
-// Get today's APOD
-app.get('/api/apod/today', (req, res) => {
-  const today = new Date().toISOString().split('T')[0];
-  const apod = db.prepare('SELECT * FROM apod WHERE date = ?').get(today);
+// Get distance between two bodies
+app.get('/api/solar/distance', (req, res) => {
+  const { from, to } = req.query;
   
-  res.json({ data: apod || null, serverTimeUtc: new Date().toISOString() });
+  if (!from || !to) {
+    return res.status(400).json({ 
+      error: { code: 'MISSING_PARAMS', message: 'from and to query params required' } 
+    });
+  }
+  
+  const fromPos = db.prepare(`
+    SELECT * FROM ephemeris_snapshots 
+    WHERE body_code = ? 
+    ORDER BY timestamp_utc DESC LIMIT 1
+  `).get(from as string);
+  
+  const toPos = db.prepare(`
+    SELECT * FROM ephemeris_snapshots 
+    WHERE body_code = ? 
+    ORDER BY timestamp_utc DESC LIMIT 1
+  `).get(to as string);
+  
+  if (!fromPos || !toPos) {
+    return res.status(404).json({ 
+      error: { code: 'NOT_FOUND', message: 'Body position not found' } 
+    });
+  }
+  
+  const dx = toPos.x_km - fromPos.x_km;
+  const dy = toPos.y_km - fromPos.y_km;
+  const dz = toPos.z_km - fromPos.z_km;
+  const distance = Math.sqrt(dx*dx + dy*dy + dz*dz);
+  
+  res.json({ 
+    data: { 
+      from: from,
+      to: to,
+      distanceKm: Math.round(distance),
+      distanceAu: Math.round(distance / 149597870.7)
+    },
+    serverTimeUtc: new Date().toISOString() 
+  });
 });
 
 // Initialize and start
