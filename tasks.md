@@ -39,7 +39,7 @@ Note: NASA APOD moved to post-MVP feature
 | CW-006 | Validate source APIs (CelesTrak, JPL) | Backend | 1 | 3 | CW-001 | ✅ Done |
 | CW-007 | Design SQLite schema for satellites/TLE/ephemeris | Backend | 2 | 3 | CW-003 | ✅ Done |
 | CW-008 | Build TLE ingestion pipeline | Backend | 2 | 5 | CW-006 | ✅ Done |
-| CW-009 | Build ephemeris ingestion pipeline | Backend | 2 | 5 | CW-006 | |
+| CW-009 | Build ephemeris ingestion pipeline | Backend | 2 | 5 | CW-006 | ✅ Done |
 | CW-010 | Implement scheduled jobs runtime | Backend | 2 | 3 | CW-003 | |
 | CW-011 | Build satellite API endpoints | Backend | 3 | 5 | CW-007 | |
 | CW-012 | Build solar system API endpoints | Backend | 3 | 3 | CW-007 | |
