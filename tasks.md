@@ -34,7 +34,7 @@
 | CW-003 | Initialize monorepo skeleton | Fullstack | 1 | 5 | CW-001 | ✅ Done |
 | CW-004 | Create ADR set (simplified stack) | Architecture | 1 | 3 | CW-002 | ✅ Done |
 | CW-005 | Define test strategy (simple) | Backend | 1 | 2 | CW-001 | ✅ Done |
-| CW-006 | Validate source APIs (CelesTrak, JPL, APOD) | Backend | 1 | 3 | CW-001 | |
+| CW-006 | Validate source APIs (CelesTrak, JPL, APOD) | Backend | 1 | 3 | CW-001 | ✅ Done |
 | CW-007 | Design SQLite schema for satellites/TLE/ephemeris | Backend | 2 | 3 | CW-003 | |
 | CW-008 | Build TLE ingestion pipeline | Backend | 2 | 5 | CW-006 | |
 | CW-009 | Build ephemeris ingestion pipeline | Backend | 2 | 5 | CW-006 | |
