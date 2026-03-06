@@ -18,7 +18,7 @@ app.get('/api/health', (req, res) => {
   const ephSync = db.prepare(`
     SELECT * FROM sync_runs WHERE source_name = 'jpl' ORDER BY started_at DESC LIMIT 1
   `).get();
-  
+
   res.json({ 
     status: 'ok', 
     timestamp: new Date().toISOString(),
@@ -166,8 +166,11 @@ app.get('/api/solar/distance', (req, res) => {
 });
 
 // Initialize and start
-initializeDatabase();
-
-app.listen(PORT, () => {
-  console.log(`🚀 Cosmic Watch API running on port ${PORT}`);
+initializeDatabase().then(() => {
+  app.listen(PORT, () => {
+    console.log(`🚀 Cosmic Watch API running on port ${PORT}`);
+  });
+}).catch((err) => {
+  console.error('Failed to initialize database:', err);
+  process.exit(1);
 });

@@ -13,11 +13,17 @@ export default defineConfig({
     },
   },
   server: {
-    port: 3000,
-    open: true,
+    port: 5173,
+    open: false,
   },
   build: {
     outDir: 'dist',
     sourcemap: true,
+  },
+  optimizeDeps: {
+    include: ['cesium'],
+  },
+  define: {
+    CESIUM_BASE_URL: JSON.stringify('/cesium'),
   },
 });

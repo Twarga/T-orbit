@@ -9,10 +9,12 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@cosmic-watch/core-types": "*",
+    "@cosmic-watch/orbital-engine": "*",
+    "cesium": "^1.139.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@cosmic-watch/core-types": "*",
-    "@cosmic-watch/orbital-engine": "*"
+    "satellite.js": "^5.0.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.0",

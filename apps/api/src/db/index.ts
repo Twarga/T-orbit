@@ -1,17 +1,34 @@
-import Database from 'better-sqlite3';
+import initSqlJs from 'sql.js';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DB_PATH = path.join(__dirname, '../../data/cosmic-watch.db');
+const DATA_DIR = path.join(__dirname, '../../data');
+const DB_PATH = path.join(DATA_DIR, 'cosmic-watch.db');
 
-const db = new Database(DB_PATH);
-db.pragma('journal_mode = WAL');
-db.pragma('foreign_keys = ON');
+let sqlDb: any = null;
+let SQL: any = null;
 
-export function initializeDatabase() {
-  // Satellites master table
-  db.exec(`
+export async function initializeDatabase() {
+  if (sqlDb) return sqlDb;
+
+  SQL = await initSqlJs();
+
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+
+  let data: Buffer | null = null;
+  if (fs.existsSync(DB_PATH)) {
+    data = fs.readFileSync(DB_PATH);
+  }
+
+  sqlDb = new SQL.Database(data ? new Uint8Array(data) : undefined);
+
+  sqlDb.run('PRAGMA foreign_keys = ON');
+
+  sqlDb.run(`
     CREATE TABLE IF NOT EXISTS satellites (
       norad_id INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
@@ -25,8 +42,7 @@ export function initializeDatabase() {
     )
   `);
 
-  // TLE (Two-Line Element) sets
-  db.exec(`
+  sqlDb.run(`
     CREATE TABLE IF NOT EXISTS tle_sets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       norad_id INTEGER NOT NULL,
@@ -40,14 +56,12 @@ export function initializeDatabase() {
     )
   `);
 
-  // Index for fast TLE lookups
-  db.exec(`
+  sqlDb.run(`
     CREATE INDEX IF NOT EXISTS idx_tle_norad_epoch 
     ON tle_sets(norad_id, epoch_utc DESC)
   `);
 
-  // Celestial bodies (Sun, planets, Moon)
-  db.exec(`
+  sqlDb.run(`
     CREATE TABLE IF NOT EXISTS celestial_bodies (
       body_code TEXT PRIMARY KEY,
       name TEXT NOT NULL,
@@ -55,8 +69,7 @@ export function initializeDatabase() {
     )
   `);
 
-  // Ephemeris snapshots (positions)
-  db.exec(`
+  sqlDb.run(`
     CREATE TABLE IF NOT EXISTS ephemeris_snapshots (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       body_code TEXT NOT NULL,
@@ -72,14 +85,12 @@ export function initializeDatabase() {
     )
   `);
 
-  // Index for ephemeris lookups
-  db.exec(`
+  sqlDb.run(`
     CREATE INDEX IF NOT EXISTS idx_ephemeris_body_time 
     ON ephemeris_snapshots(body_code, timestamp_utc)
   `);
 
-  // Satellite metadata (SME curated)
-  db.exec(`
+  sqlDb.run(`
     CREATE TABLE IF NOT EXISTS satellite_metadata (
       norad_id INTEGER PRIMARY KEY,
       summary TEXT,
@@ -93,8 +104,7 @@ export function initializeDatabase() {
     )
   `);
 
-  // Sync run audit log
-  db.exec(`
+  sqlDb.run(`
     CREATE TABLE IF NOT EXISTS sync_runs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       source_name TEXT NOT NULL,
@@ -107,7 +117,6 @@ export function initializeDatabase() {
     )
   `);
 
-  // Seed celestial bodies
   const bodies = [
     ['SUN', 'Sun', 'star'],
     ['MOON', 'Moon', 'moon'],
@@ -121,15 +130,67 @@ export function initializeDatabase() {
     ['NEPTUNE', 'Neptune', 'planet'],
   ];
 
-  const insertBody = db.prepare(`
-    INSERT OR IGNORE INTO celestial_bodies (body_code, name, category) VALUES (?, ?, ?)
-  `);
-
   for (const [code, name, category] of bodies) {
-    insertBody.run(code, name, category);
+    sqlDb.run(
+      'INSERT OR IGNORE INTO celestial_bodies (body_code, name, category) VALUES (?, ?, ?)',
+      [code, name, category]
+    );
   }
 
+  saveDatabase();
   console.log('✅ Database initialized at:', DB_PATH);
+  return sqlDb;
 }
+
+export function saveDatabase() {
+  if (!sqlDb) return;
+  const data = sqlDb.export();
+  const buffer = Buffer.from(data);
+  fs.writeFileSync(DB_PATH, buffer);
+}
+
+function rowsToObjects(stmt: any): any[] {
+  const results: any[] = [];
+  while (stmt.step()) {
+    const row = stmt.getAsObject();
+    results.push(row);
+  }
+  stmt.free();
+  return results;
+}
+
+export const db = {
+  prepare(sql: string) {
+    return {
+      all(...params: any[]) {
+        if (!sqlDb) return [];
+        const stmt = sqlDb.prepare(sql);
+        if (params.length > 0) {
+          stmt.bind(params);
+        }
+        return rowsToObjects(stmt);
+      },
+      get(...params: any[]) {
+        if (!sqlDb) return null;
+        const stmt = sqlDb.prepare(sql);
+        if (params.length > 0) {
+          stmt.bind(params);
+        }
+        const results = rowsToObjects(stmt);
+        return results.length > 0 ? results[0] : null;
+      },
+      run(...params: any[]) {
+        if (!sqlDb) return { changes: 0 };
+        if (params.length > 0) {
+          sqlDb.run(sql, params);
+        } else {
+          sqlDb.run(sql);
+        }
+        saveDatabase();
+        return { changes: sqlDb.getRowsModified() };
+      },
+    };
+  },
+};
 
 export default db;
