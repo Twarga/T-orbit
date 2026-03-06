@@ -7,18 +7,11 @@
     "packages/*"
   ],
   "scripts": {
-    "dev": "npm run dev --workspaces",
-    "build": "npm run build --workspaces",
-    "test": "npm run test --workspaces",
-    "lint": "npm run lint --workspaces",
-    "clean": "npm run clean --workspaces"
-  },
-  "devDependencies": {
-    "typescript": "^5.3.0"
+    "dev": "npm run dev --workspaces --if-present",
+    "build": "npm run build --workspaces --if-present",
+    "start": "npm run start --workspace=@cosmic-watch/api"
   },
   "engines": {
-    "node": ">=20.0.0",
-    "npm": ">=10.0.0"
-  },
-  "packageManager": "npm@10.0.0"
+    "node": ">=20.0.0"
+  }
 }

@@ -1,63 +1,60 @@
-# Cosmic Watch
+# Cosmic Watch 🌌
 
-Real-time satellite tracking mission control.
+Real-time satellite tracking dashboard. Simple hobby project.
 
-## Getting Started
+## Quick Start
 
 ```bash
-# Install dependencies
+# Install
 npm install
 
-# Start all apps
+# Development
 npm run dev
 
-# Or start individual apps
-npm run dev --workspace=@cosmic-watch/web    # Frontend on port 3000
-npm run dev --workspace=@cosmic-watch/api     # API on port 4000
+# Build
+npm run build
 ```
 
-## Project Structure
+## Stack
 
-```
-cosmic-watch/
-├── apps/
-│   ├── web/           # React + Cesium mission UI
-│   ├── api/           # Node.js API gateway
-│   └── worker/        # Scheduled ingestion jobs
-├── packages/
-│   ├── core-types/    # Shared TypeScript types
-│   ├── orbital-engine/ # SGP4 propagation
-│   ├── validation/    # Zod schemas
-│   └── observability/ # Logger/metrics
-└── package.json       # Workspace root
-```
+- **Frontend**: React + Vite + CesiumJS
+- **Backend**: Node.js + Express + SQLite
+- **Server**: Caddy (reverse proxy + HTTPS)
+- **Hosting**: Single VPS (RackNerd)
 
-## Tech Stack
-
-- **Frontend**: React, Vite, CesiumJS
-- **API**: Express, TypeScript
-- **Database**: PostgreSQL
-- **Cache**: Redis
-- **Infrastructure**: AWS (via Terraform)
-
-## Environment Variables
-
-Copy `.env.example` to `.env` and configure:
+## Deployment
 
 ```bash
-# API
-PORT=4000
-NODE_ENV=development
+# Build
+npm run build
 
-# Database
-DATABASE_URL=postgresql://...
+# Run with PM2
+pm2 start ecosystem.config.js
 
-# Redis
-REDIS_URL=redis://...
-
-# External APIs
-CELESTRAK_URL=https://celestrak.org/...
-JPL Horizons_URL=https:// Horizons-api.jpl.nasa.gov/...
-NASA_APOD_URL=https://api.nasa.gov/planetary/apod
-NASA_API_KEY=your_key
+# Caddy handles HTTPS automatically
 ```
+
+## Endpoints
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/health` | Health check |
+| `GET /api/satellites/active` | All active satellites with TLE |
+| `GET /api/satellites/:noradId` | Single satellite details |
+| `GET /api/solar/bodies` | Solar system bodies |
+| `GET /api/solar/positions` | Current positions |
+| `GET /api/apod/today` | NASA picture of the day |
+
+## Development
+
+```bash
+# Frontend only
+npm run dev --workspace=@cosmic-watch/web
+
+# API only
+npm run dev --workspace=@cosmic-watch/api
+```
+
+## License
+
+MIT
