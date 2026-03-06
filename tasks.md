@@ -22,8 +22,10 @@
 ## 4) Sprint Plan
 - Sprint 1: Project bootstrap, architecture, simple infrastructure
 - Sprint 2: Data ingestion and storage (SQLite)
-- Sprint 3: Core backend APIs
+- Sprint 3: Core backend APIs  
 - Sprint 4: Mission UI and MVP launch
+
+Note: NASA APOD moved to post-MVP feature
 
 ## 5) Task Backlog With Ownership
 
@@ -34,25 +36,22 @@
 | CW-003 | Initialize monorepo skeleton | Fullstack | 1 | 5 | CW-001 | ✅ Done |
 | CW-004 | Create ADR set (simplified stack) | Architecture | 1 | 3 | CW-002 | ✅ Done |
 | CW-005 | Define test strategy (simple) | Backend | 1 | 2 | CW-001 | ✅ Done |
-| CW-006 | Validate source APIs (CelesTrak, JPL, APOD) | Backend | 1 | 3 | CW-001 | ✅ Done |
-| CW-007 | Design SQLite schema for satellites/TLE/ephemeris | Backend | 2 | 3 | CW-003 | |
-| CW-008 | Build TLE ingestion pipeline | Backend | 2 | 5 | CW-006 | |
+| CW-006 | Validate source APIs (CelesTrak, JPL) | Backend | 1 | 3 | CW-001 | ✅ Done |
+| CW-007 | Design SQLite schema for satellites/TLE/ephemeris | Backend | 2 | 3 | CW-003 | ✅ Done |
+| CW-008 | Build TLE ingestion pipeline | Backend | 2 | 5 | CW-006 | ✅ Done |
 | CW-009 | Build ephemeris ingestion pipeline | Backend | 2 | 5 | CW-006 | |
-| CW-010 | Build APOD ingestion | Backend | 2 | 3 | CW-006 | |
-| CW-011 | Implement scheduled jobs runtime | Backend | 2 | 3 | CW-003 | |
-| CW-012 | Build satellite API endpoints | Backend | 3 | 5 | CW-007 | |
-| CW-013 | Build solar system API endpoints | Backend | 3 | 3 | CW-007 | |
-| CW-014 | Build metadata API endpoints | Backend | 3 | 3 | CW-007 | |
-| CW-015 | Build APOD API endpoint | Backend | 3 | 2 | CW-010 | |
-| CW-016 | Bootstrap React + Cesium app | Frontend | 4 | 5 | CW-003 | |
-| CW-017 | Implement satellite rendering layer | Frontend | 4 | 8 | CW-016 | |
-| CW-018 | Implement Web Worker SGP4 propagation | Frontend | 4 | 5 | CW-017 | |
-| CW-019 | Implement ISS focus mode | Frontend | 4 | 3 | CW-017 | |
-| CW-020 | Build solar system navigator | Frontend | 4 | 5 | CW-013 | |
-| CW-021 | Build SME sidebar panel | Frontend | 4 | 3 | CW-014 | |
-| CW-022 | Integrate APOD splash | Frontend | 4 | 2 | CW-015 | |
-| CW-023 | Configure Caddy for production | Fullstack | 4 | 3 | CW-012 | |
-| CW-024 | Deploy to VPS and verify | Fullstack | 4 | 3 | CW-023 | |
+| CW-010 | Implement scheduled jobs runtime | Backend | 2 | 3 | CW-003 | |
+| CW-011 | Build satellite API endpoints | Backend | 3 | 5 | CW-007 | |
+| CW-012 | Build solar system API endpoints | Backend | 3 | 3 | CW-007 | |
+| CW-013 | Build metadata API endpoints | Backend | 3 | 3 | CW-007 | |
+| CW-014 | Bootstrap React + Cesium app | Frontend | 4 | 5 | CW-003 | |
+| CW-015 | Implement satellite rendering layer | Frontend | 4 | 8 | CW-014 | |
+| CW-016 | Implement Web Worker SGP4 propagation | Frontend | 4 | 5 | CW-015 | |
+| CW-017 | Implement ISS focus mode | Frontend | 4 | 3 | CW-015 | |
+| CW-018 | Build solar system navigator | Frontend | 4 | 5 | CW-012 | |
+| CW-019 | Build SME sidebar panel | Frontend | 4 | 3 | CW-013 | |
+| CW-020 | Configure Caddy for production | Fullstack | 4 | 3 | CW-010 | |
+| CW-021 | Deploy to VPS and verify | Fullstack | 4 | 3 | CW-020 | |
 
 ## 6) Simple Stack
 

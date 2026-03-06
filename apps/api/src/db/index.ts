@@ -6,11 +6,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DB_PATH = path.join(__dirname, '../../data/cosmic-watch.db');
 
 const db = new Database(DB_PATH);
-
 db.pragma('journal_mode = WAL');
 db.pragma('foreign_keys = ON');
 
 export function initializeDatabase() {
+  // Satellites master table
   db.exec(`
     CREATE TABLE IF NOT EXISTS satellites (
       norad_id INTEGER PRIMARY KEY,
@@ -22,8 +22,11 @@ export function initializeDatabase() {
       is_active INTEGER DEFAULT 1,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    );
+    )
+  `);
 
+  // TLE (Two-Line Element) sets
+  db.exec(`
     CREATE TABLE IF NOT EXISTS tle_sets (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       norad_id INTEGER NOT NULL,
@@ -34,16 +37,26 @@ export function initializeDatabase() {
       ingested_at TEXT DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (norad_id) REFERENCES satellites(norad_id),
       UNIQUE(norad_id, epoch_utc)
-    );
+    )
+  `);
 
-    CREATE INDEX IF NOT EXISTS idx_tle_norad_epoch ON tle_sets(norad_id, epoch_utc DESC);
+  // Index for fast TLE lookups
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_tle_norad_epoch 
+    ON tle_sets(norad_id, epoch_utc DESC)
+  `);
 
+  // Celestial bodies (Sun, planets, Moon)
+  db.exec(`
     CREATE TABLE IF NOT EXISTS celestial_bodies (
       body_code TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       category TEXT NOT NULL
-    );
+    )
+  `);
 
+  // Ephemeris snapshots (positions)
+  db.exec(`
     CREATE TABLE IF NOT EXISTS ephemeris_snapshots (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       body_code TEXT NOT NULL,
@@ -56,10 +69,17 @@ export function initializeDatabase() {
       vz_kms REAL,
       FOREIGN KEY (body_code) REFERENCES celestial_bodies(body_code),
       UNIQUE(body_code, timestamp_utc)
-    );
+    )
+  `);
 
-    CREATE INDEX IF NOT EXISTS idx_ephemeris_body_time ON ephemeris_snapshots(body_code, timestamp_utc);
+  // Index for ephemeris lookups
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_ephemeris_body_time 
+    ON ephemeris_snapshots(body_code, timestamp_utc)
+  `);
 
+  // Satellite metadata (SME curated)
+  db.exec(`
     CREATE TABLE IF NOT EXISTS satellite_metadata (
       norad_id INTEGER PRIMARY KEY,
       summary TEXT,
@@ -70,18 +90,11 @@ export function initializeDatabase() {
       fact_json TEXT,
       last_reviewed_at TEXT,
       FOREIGN KEY (norad_id) REFERENCES satellites(norad_id)
-    );
+    )
+  `);
 
-    CREATE TABLE IF NOT EXISTS apod (
-      date TEXT PRIMARY KEY,
-      title TEXT NOT NULL,
-      explanation TEXT,
-      url TEXT NOT NULL,
-      hdurl TEXT,
-      media_type TEXT,
-      copyright TEXT
-    );
-
+  // Sync run audit log
+  db.exec(`
     CREATE TABLE IF NOT EXISTS sync_runs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       source_name TEXT NOT NULL,
@@ -91,12 +104,12 @@ export function initializeDatabase() {
       records_in INTEGER DEFAULT 0,
       records_out INTEGER DEFAULT 0,
       error_summary TEXT
-    );
+    )
   `);
 
   // Seed celestial bodies
   const bodies = [
-    ['SUN', 'Sun', 'sun'],
+    ['SUN', 'Sun', 'star'],
     ['MOON', 'Moon', 'moon'],
     ['MERCURY', 'Mercury', 'planet'],
     ['VENUS', 'Venus', 'planet'],
