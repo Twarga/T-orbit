@@ -13,12 +13,23 @@ export default defineConfig({
     },
   },
   server: {
-    port: 5173,
+    port: 8787,
     open: false,
+    fs: {
+      allow: ['..'],
+    },
   },
+  publicDir: 'public',
   build: {
     outDir: 'dist',
     sourcemap: true,
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          cesium: ['cesium'],
+        },
+      },
+    },
   },
   optimizeDeps: {
     include: ['cesium'],

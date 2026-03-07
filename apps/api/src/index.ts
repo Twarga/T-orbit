@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import db, { initializeDatabase } from './db/index.js';
+import db, { initializeDatabase, saveDatabase } from './db/index.js';
 import './jobs/scheduler.js';
 
 const app = express();
@@ -8,6 +8,54 @@ const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+
+// Seed sample data - fetch real TLE from CelesTrak
+app.post('/api/seed', async (req, res) => {
+  try {
+    const axios = await import('axios');
+    
+    // Fetch ISS
+    const issRes = await axios.default.get(
+      'https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=json'
+    );
+    
+    // Fetch Starlink (first 10)
+    const starlinkRes = await axios.default.get(
+      'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=json'
+    );
+    
+    const iss = issRes.data?.[0];
+    const starlinks = (starlinkRes.data?.data || starlinkRes.data || []).slice(0, 5);
+    
+    let count = 0;
+    
+    // Insert ISS
+    if (iss) {
+      const line1 = `1 ${String(iss.NORAD_CAT_ID).padStart(5,'0')}  0 ${iss.EPOCH?.slice(2,10) || '24001.00000000'} ${(iss.MEAN_MOTION_DOT||'0').toString().padStart(10,' ')} ${(iss.BSTAR||'0').toString().padStart(10,' ')} 0 99999  0`;
+      const line2 = `2 ${String(iss.NORAD_CAT_ID).padStart(5,'0')}  ${String(iss.INCLINATION||0).padStart(8,' ')} ${String(iss.RA_OF_ASC_NODE||0).padStart(8,' ')} ${String((iss.ECCENTRICITY||'0').toString().slice(2)).padStart(7,' ')} ${String(iss.ARG_OF_PERICENTER||0).padStart(8,' ')} ${String(iss.MEAN_ANOMALY||0).padStart(8,' ')} ${String(iss.MEAN_MOTION||0).padStart(11,' ')} 0`;
+      
+      db.prepare(`INSERT OR REPLACE INTO satellites (norad_id, name, is_active) VALUES (?, ?, 1)`).run(iss.NORAD_CAT_ID, iss.OBJECT_NAME);
+      db.prepare(`INSERT OR REPLACE INTO tle_sets (norad_id, epoch_utc, line1, line2, source) VALUES (?, datetime('now'), ?, ?, 'celestrak')`).run(iss.NORAD_CAT_ID, line1, line2);
+      count++;
+    }
+    
+    // Insert Starlink
+    for (const sat of starlinks) {
+      if (!sat.NORAD_CAT_ID || !sat.OBJECT_NAME) continue;
+      const line1 = `1 ${String(sat.NORAD_CAT_ID).padStart(5,'0')}  0 ${sat.EPOCH?.slice(2,10) || '24001.00000000'} ${(sat.MEAN_MOTION_DOT||'0').toString().padStart(10,' ')} ${(sat.BSTAR||'0').toString().padStart(10,' ')} 0 99999  0`;
+      const line2 = `2 ${String(sat.NORAD_CAT_ID).padStart(5,'0')} ${String(sat.INCLINATION||0).padStart(8,' ')} ${String(sat.RA_OF_ASC_NODE||0).padStart(8,' ')} ${String((sat.ECCENTRICITY||'0').toString().slice(2)).padStart(7,' ')} ${String(sat.ARG_OF_PERICENTER||0).padStart(8,' ')} ${String(sat.MEAN_ANOMALY||0).padStart(8,' ')} ${String(sat.MEAN_MOTION||0).padStart(11,' ')} 0`;
+      
+      db.prepare(`INSERT OR REPLACE INTO satellites (norad_id, name, is_active) VALUES (?, ?, 1)`).run(sat.NORAD_CAT_ID, sat.OBJECT_NAME);
+      db.prepare(`INSERT OR REPLACE INTO tle_sets (norad_id, epoch_utc, line1, line2, source) VALUES (?, datetime('now'), ?, ?, 'celestrak')`).run(sat.NORAD_CAT_ID, line1, line2);
+      count++;
+    }
+    
+    saveDatabase();
+    res.json({ success: true, count });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to seed' });
+  }
+});
 
 // Health check
 app.get('/api/health', (req, res) => {

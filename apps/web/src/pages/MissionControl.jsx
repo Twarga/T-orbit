@@ -1,13 +1,38 @@
-import { useState, useEffect, useCallback } from 'react';
-import * as satellite from 'satellite.js';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import CesiumGlobe from '../components/CesiumGlobe';
+import SolarNavigator from '../components/SolarNavigator';
 
 const MissionControl = () => {
+  const [view, setView] = useState('satellites'); // 'satellites' | 'solar'
   const [satellites, setSatellites] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedSat, setSelectedSat] = useState(null);
   const [focusedSatId, setFocusedSatId] = useState(null);
+  const [showTrails, setShowTrails] = useState(false);
+  
+  const workerRef = useRef(null);
+
+  useEffect(() => {
+    workerRef.current = new Worker(new URL('../workers/propagation.worker.js', import.meta.url));
+    
+    workerRef.current.onmessage = (e) => {
+      const { type, positions } = e.data;
+      
+      if (type === 'POSITIONS') {
+        setSatellites(prev => prev.map(sat => {
+          const pos = positions.find(p => p.norad_id === sat.norad_id);
+          return pos ? { ...sat, position: pos.position } : sat;
+        }));
+      }
+    };
+    
+    return () => {
+      if (workerRef.current) {
+        workerRef.current.terminate();
+      }
+    };
+  }, []);
 
   const fetchSatellites = useCallback(async () => {
     try {
@@ -29,42 +54,21 @@ const MissionControl = () => {
   }, [fetchSatellites]);
 
   useEffect(() => {
-    if (satellites.length === 0) return;
-
-    const propagate = (line1, line2, date) => {
-      try {
-        const satrec = satellite.twoline2satrec(line1, line2);
-        if (!satrec) return null;
-
-        const position = satellite.propagate(satrec, date);
-        if (!position?.position) return null;
-
-        const gmst = satellite.gstime(date);
-        const positionEci = satellite.ecfToEci(position.position, gmst);
-        const location = satellite.eciToGeodetic(positionEci, gmst);
-
-        return {
-          latitude: satellite.degreesLat(location.latitude),
-          longitude: satellite.degreesLong(location.longitude),
-          altitude: location.height / 1000,
-        };
-      } catch {
-        return null;
-      }
-    };
+    if (satellites.length === 0 || !workerRef.current) return;
 
     const updatePositions = () => {
       const now = new Date();
-      const updated = satellites.map((sat) => {
-        if (!sat.line1 || !sat.line2) return sat;
-        const position = propagate(sat.line1, sat.line2, now);
-        return { ...sat, position };
+      const tleSats = satellites.filter(s => s.line1 && s.line2);
+      
+      workerRef.current.postMessage({
+        type: 'PROPAGATE',
+        satellites: tleSats,
+        time: now,
       });
-      setSatellites(updated);
     };
 
     updatePositions();
-    const interval = setInterval(updatePositions, 5000);
+    const interval = setInterval(updatePositions, 1000);
     return () => clearInterval(interval);
   }, [satellites.length]);
 
@@ -100,26 +104,49 @@ const MissionControl = () => {
 
   return (
     <div style={styles.container}>
-      <CesiumGlobe
-        satellites={satellites}
-        onSatelliteSelect={handleSatelliteSelect}
-        focusedSatelliteId={focusedSatId}
-      />
+      {view === 'satellites' ? (
+        <CesiumGlobe
+          satellites={satellites}
+          onSatelliteSelect={handleSatelliteSelect}
+          focusedSatelliteId={focusedSatId}
+          showTrails={showTrails}
+        />
+      ) : (
+        <div style={styles.solarContainer}>
+          <SolarNavigator />
+        </div>
+      )}
 
       <div style={styles.header}>
         <div style={styles.logo}>
-          <span style={styles.logoIcon}>🛰️</span>
-          Cosmic Watch
+          <span style={styles.logoIcon}>{view === 'satellites' ? '🛰️' : '🪐'}</span>
+          {view === 'satellites' ? 'Cosmic Watch' : 'Solar Navigator'}
         </div>
-        <div style={styles.stats}>
-          <span>Active Satellites: {satellites.length}</span>
+        <div style={styles.controls}>
+          <button 
+            onClick={() => setView(view === 'satellites' ? 'solar' : 'satellites')}
+            style={styles.viewToggleBtn}
+          >
+            {view === 'satellites' ? '🪐 Solar System' : '🛰️ Satellites'}
+          </button>
+          {view === 'satellites' && (
+            <>
+              <button 
+                onClick={() => setShowTrails(!showTrails)}
+                style={styles.toggleBtn}
+              >
+                {showTrails ? '◉' : '○'} Orbits
+              </button>
+              <span style={styles.stats}>Active: {satellites.length}</span>
+            </>
+          )}
         </div>
       </div>
 
       {iss && (
         <div style={styles.issCard}>
           <div style={styles.issHeader}>
-            <span style={styles.issIcon}>🔴</span>
+            <span style={styles.issIcon}>{focusedSatId === 25544 ? '🔵' : '🔴'}</span>
             <span>ISS (ZARYA)</span>
             <span style={styles.issId}>NORAD {iss.norad_id}</span>
           </div>
@@ -140,10 +167,10 @@ const MissionControl = () => {
             </div>
           )}
           <button
-            onClick={() => handleFocusSatellite(iss)}
-            style={styles.focusBtn}
+            onClick={() => setFocusedSatId(focusedSatId === 25544 ? null : 25544)}
+            style={focusedSatId === 25544 ? styles.focusBtnActive : styles.focusBtn}
           >
-            Focus
+            {focusedSatId === 25544 ? '✕ Stop Tracking' : '🎯 Focus ISS'}
           </button>
         </div>
       )}
@@ -240,6 +267,36 @@ const styles = {
     color: '#a1a1aa',
     fontSize: '0.9rem',
   },
+  controls: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '1rem',
+  },
+  toggleBtn: {
+    padding: '0.4rem 0.8rem',
+    background: 'rgba(255,255,255,0.1)',
+    border: '1px solid rgba(255,255,255,0.2)',
+    borderRadius: '6px',
+    color: '#fff',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+    transition: 'all 0.2s',
+  },
+  viewToggleBtn: {
+    padding: '0.4rem 0.8rem',
+    background: 'rgba(139, 92, 246, 0.3)',
+    border: '1px solid rgba(139, 92, 246, 0.5)',
+    borderRadius: '6px',
+    color: '#c4b5fd',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+    transition: 'all 0.2s',
+  },
+  solarContainer: {
+    width: '100%',
+    height: '100vh',
+    background: '#0a0a0f',
+  },
   issCard: {
     position: 'absolute',
     top: '80px',
@@ -289,6 +346,17 @@ const styles = {
     border: '1px solid rgba(255, 68, 68, 0.5)',
     borderRadius: '6px',
     color: '#ff4444',
+    cursor: 'pointer',
+    fontSize: '0.85rem',
+    transition: 'all 0.2s',
+  },
+  focusBtnActive: {
+    width: '100%',
+    padding: '0.5rem',
+    background: 'rgba(59, 130, 246, 0.3)',
+    border: '1px solid rgba(59, 130, 246, 0.6)',
+    borderRadius: '6px',
+    color: '#60a5fa',
     cursor: 'pointer',
     fontSize: '0.85rem',
     transition: 'all 0.2s',

@@ -41,28 +41,57 @@ async function fetchBodyPosition(bodyCode: string, horizonsCode: string): Promis
   });
 
   try {
-    const response = await axios.get<string>(`${JPL_HORIZONS_URL}?${params}`, {
+    const response = await axios.get(`${JPL_HORIZONS_URL}?${params}`, {
       timeout: 30000,
     });
 
-    const lines = response.data.split('\n');
-    let inVectorSection = false;
+    // Handle JSON response format
+    const data = response.data;
+    
+    if (data.result) {
+      // JSON with result string
+      const lines = data.result.split('\n');
+      let inVectorSection = false;
 
-    for (const line of lines) {
-      if (line.includes('$$SOF')) {
-        inVectorSection = true;
-        continue;
+      for (const line of lines) {
+        if (line.includes('$$SOF')) {
+          inVectorSection = true;
+          continue;
+        }
+        if (line.includes('$$EOE')) break;
+        if (inVectorSection && line.trim()) {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 3) {
+            return {
+              bodyCode,
+              xKm: parseFloat(parts[0]) * 149597870.7,
+              yKm: parseFloat(parts[1]) * 149597870.7,
+              zKm: parseFloat(parts[2]) * 149597870.7,
+            };
+          }
+        }
       }
-      if (line.includes('$$EOE')) break;
-      if (inVectorSection && line.trim()) {
-        const parts = line.trim().split(/\s+/);
-        if (parts.length >= 3) {
-          return {
-            bodyCode,
-            xKm: parseFloat(parts[0]) * 149597870.7,
-            yKm: parseFloat(parts[1]) * 149597870.7,
-            zKm: parseFloat(parts[2]) * 149597870.7,
-          };
+    } else if (data.verifier) {
+      // Alternative JSON format
+      const lines = data.verifier.split('\n');
+      let inVectorSection = false;
+
+      for (const line of lines) {
+        if (line.includes('$$SOF')) {
+          inVectorSection = true;
+          continue;
+        }
+        if (line.includes('$$EOE')) break;
+        if (inVectorSection && line.trim()) {
+          const parts = line.trim().split(/\s+/);
+          if (parts.length >= 3) {
+            return {
+              bodyCode,
+              xKm: parseFloat(parts[0]) * 149597870.7,
+              yKm: parseFloat(parts[1]) * 149597870.7,
+              zKm: parseFloat(parts[2]) * 149597870.7,
+            };
+          }
         }
       }
     }
@@ -83,7 +112,8 @@ export async function syncEphemeris(): Promise<{ success: boolean; records: numb
     INSERT INTO sync_runs (source_name, status) VALUES ('jpl', 'running')
   `).run();
 
-  const syncRunId = syncRun.lastInsertRowid;
+  const lastRun = db.prepare(`SELECT last_insert_rowid() as id`).get();
+  const syncRunId = lastRun?.id || 1;
 
   try {
     const bodyEntries = Object.entries(BODY_CODES);

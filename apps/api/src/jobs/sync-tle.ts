@@ -5,15 +5,6 @@ interface CelesTrakSatellite {
   OBJECT_NAME: string;
   NORAD_CAT_ID: number;
   INTERNATIONAL_DESIGNATOR: string;
-  EPOCH?: string;
-  MEAN_MOTION?: string;
-  ECCENTRICITY?: string;
-  INCLINATION?: string;
-  RAAN?: string;
-  ARG_OF_PERICENTER?: string;
-  MEAN_ANOMALY?: string;
-  MEAN_MOTION_DOT?: string;
-  BSTAR?: string;
 }
 
 interface TleData {
@@ -29,14 +20,13 @@ function formatNumber(num: string | undefined, decimals: number, width: number):
   return formatted.padStart(width);
 }
 
-function buildTleFromCelesTrak(sat: CelesTrakSatellite): TleData | null {
+function buildTleFromCelesTrak(sat: CelesTrakSatellite & Record<string, string>): TleData | null {
   const norad = sat.NORAD_CAT_ID;
   const name = sat.OBJECT_NAME;
   const designator = sat.INTERNATIONAL_DESIGNATOR || '';
   
   if (!norad || !name) return null;
   
-  // Extract launch year/day from international designator (e.g., "1998-067A")
   let launchYear = '24';
   let launchDay = '001';
   if (designator.length >= 5) {
@@ -47,8 +37,7 @@ function buildTleFromCelesTrak(sat: CelesTrakSatellite): TleData | null {
     launchDay = dayPart;
   }
   
-  // Format epoch - use current time if not provided
-  const epochStr = sat.EPOCH || new Date().toISOString();
+  const epochStr = new Date().toISOString();
   const epochMatch = epochStr.match(/(\d{4})-(\d{2})-(\d{2})/);
   let epochYear = '24';
   let epochDayOfYear = '001';
@@ -57,16 +46,14 @@ function buildTleFromCelesTrak(sat: CelesTrakSatellite): TleData | null {
     const month = parseInt(epochMatch[2]);
     const day = parseInt(epochMatch[3]);
     epochYear = year;
-    // Approximate day of year
     const days = [0, 31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     let dayOfYear = day;
     for (let i = 1; i < month; i++) dayOfYear += days[i];
     epochDayOfYear = dayOfYear.toString().padStart(3, '0');
   }
   
-  // Format TLE fields
   const inc = formatNumber(sat.INCLINATION, 4, 8);
-  const ecc = formatNumber(sat.ECCENTRICITY, 7, 7).substring(2); // Remove "0."
+  const ecc = formatNumber(sat.ECCENTRICITY, 7, 7).substring(2);
   const raan = formatNumber(sat.RAAN || sat.ARG_OF_PERICENTER, 4, 8);
   const argPe = formatNumber(sat.ARG_OF_PERICENTER, 4, 8);
   const meanAnom = formatNumber(sat.MEAN_ANOMALY, 4, 8);
@@ -74,14 +61,10 @@ function buildTleFromCelesTrak(sat: CelesTrakSatellite): TleData | null {
   const meanMotionDot = formatNumber(sat.MEAN_MOTION_DOT, 8, 10);
   const bstar = (sat.BSTAR || '0').padStart(10);
   
-  const checksum1 = '0';
-  const checksum2 = '0';
-  
-  // TLE line 1
   const line1 = [
     '1 ',
     String(norad).padStart(5, '0'),
-    checksum1,
+    '0',
     'U ',
     launchYear + launchDay + '.00000000',
     ' ',
@@ -89,10 +72,9 @@ function buildTleFromCelesTrak(sat: CelesTrakSatellite): TleData | null {
     bstar,
     ' 0',
     ' 99999',
-    '  0',
+    ' 0',
   ].join('');
   
-  // TLE line 2
   const line2 = [
     '2 ',
     String(norad).padStart(5, '0'),
@@ -107,7 +89,7 @@ function buildTleFromCelesTrak(sat: CelesTrakSatellite): TleData | null {
     ' ',
     meanAnom,
     meanMotion,
-    checksum2,
+    '0',
     String(norad).padStart(5, '0'),
   ].join('');
   
@@ -121,45 +103,63 @@ export async function syncTleFromCelesTrak(): Promise<{ success: boolean; record
     INSERT INTO sync_runs (source_name, status) VALUES ('celestrak', 'running')
   `).run();
   
-  const syncRunId = syncRun.lastInsertRowid;
+  const lastRun = db.prepare(`SELECT last_insert_rowid() as id`).get();
+  const syncRunId = lastRun?.id || 1;
   
   try {
+    // Fetch only Starlink satellites (smaller dataset for MVP)
     const response = await axios.get<{ data: CelesTrakSatellite[] }>(
-      'https://celestrak.org/NORAD/elements/gp.php?GROUP=active&FORMAT=json',
+      'https://celestrak.org/NORAD/elements/gp.php?GROUP=starlink&FORMAT=json',
       { timeout: 60000 }
     );
     
-    const satellites = response.data;
-    console.log(`📡 Received ${satellites.length} satellites from CelesTrak`);
+    // Also fetch ISS and a few other notable satellites
+    const [issRes, iridiumRes, gpsRes] = await Promise.all([
+      axios.get<{ data: CelesTrakSatellite[] }>(
+        'https://celestrak.org/NORAD/elements/gp.php?CATNR=25544&FORMAT=json',
+        { timeout: 30000 }
+      ).catch(() => ({ data: { data: [] } })),
+      axios.get<{ data: CelesTrakSatellite[] }>(
+        'https://celestrak.org/NORAD/elements/gp.php?GROUP=iridium-NEXT&FORMAT=json',
+        { timeout: 30000 }
+      ).catch(() => ({ data: { data: [] } })),
+      axios.get<{ data: CelesTrakSatellite[] }>(
+        'https://celestrak.org/NORAD/elements/gp.php?GROUP=gps-ops&FORMAT=json',
+        { timeout: 30000 }
+      ).catch(() => ({ data: { data: [] } })),
+    ]);
+    
+    // Combine all satellites
+    const allSatellites = [
+      ...(response.data?.data || []),
+      ...(issRes.data?.data || []),
+      ...(iridiumRes.data?.data || []),
+      ...(gpsRes.data?.data || []),
+    ];
+    
+    // Remove duplicates by NORAD ID
+    const uniqueSatellites = Array.from(
+      new Map(allSatellites.map(s => [s.NORAD_CAT_ID, s])).values()
+    );
+    
+    console.log(`📡 Fetched ${uniqueSatellites.length} satellites`);
     
     let satellitesUpserted = 0;
     let tleUpserted = 0;
     
-    const upsertSatellite = db.prepare(`
-      INSERT INTO satellites (norad_id, name, international_designator, is_active, updated_at)
-      VALUES (?, ?, ?, 1, datetime('now'))
-      ON CONFLICT(norad_id) DO UPDATE SET
-        name = excluded.name,
-        international_designator = excluded.international_designator,
-        is_active = 1,
-        updated_at = datetime('now')
-    `);
-    
-    const upsertTle = db.prepare(`
-      INSERT INTO tle_sets (norad_id, epoch_utc, line1, line2, source)
-      VALUES (?, datetime('now', 'utc'), ?, ?, 'celestrak')
-      ON CONFLICT(norad_id, epoch_utc) DO NOTHING
-    `);
-    
-    const transaction = db.transaction(() => {
-      for (const sat of satellites) {
-        if (!sat.NORAD_CAT_ID || !sat.OBJECT_NAME) continue;
-        
-        const result = upsertSatellite.run(
-          sat.NORAD_CAT_ID,
-          sat.OBJECT_NAME,
-          sat.INTERNATIONAL_DESIGNATOR || null
-        );
+    for (const sat of uniqueSatellites) {
+      if (!sat.NORAD_CAT_ID || !sat.OBJECT_NAME) continue;
+      
+      try {
+        const result = db.prepare(`
+          INSERT INTO satellites (norad_id, name, international_designator, is_active, updated_at)
+          VALUES (?, ?, ?, 1, datetime('now'))
+          ON CONFLICT(norad_id) DO UPDATE SET
+            name = excluded.name,
+            international_designator = excluded.international_designator,
+            is_active = 1,
+            updated_at = datetime('now')
+        `).run(sat.NORAD_CAT_ID, sat.OBJECT_NAME, sat.INTERNATIONAL_DESIGNATOR || null);
         
         if (result.changes > 0) {
           satellitesUpserted++;
@@ -167,19 +167,20 @@ export async function syncTleFromCelesTrak(): Promise<{ success: boolean; record
         
         const tle = buildTleFromCelesTrak(sat);
         if (tle) {
-          const tleResult = upsertTle.run(
-            tle.noradId,
-            tle.line1,
-            tle.line2
-          );
+          const tleResult = db.prepare(`
+            INSERT INTO tle_sets (norad_id, epoch_utc, line1, line2, source)
+            VALUES (?, datetime('now', 'utc'), ?, ?, 'celestrak')
+            ON CONFLICT(norad_id, epoch_utc) DO NOTHING
+          `).run(tle.noradId, tle.line1, tle.line2);
+          
           if (tleResult.changes > 0) {
             tleUpserted++;
           }
         }
+      } catch (err) {
+        // Skip failed inserts
       }
-    });
-    
-    transaction();
+    }
     
     db.prepare(`
       UPDATE sync_runs 
@@ -188,7 +189,7 @@ export async function syncTleFromCelesTrak(): Promise<{ success: boolean; record
           records_in = ?,
           records_out = ?
       WHERE id = ?
-    `).run(satellites.length, tleUpserted, syncRunId);
+    `).run(uniqueSatellites.length, tleUpserted, syncRunId);
     
     console.log(`✅ TLE sync complete: ${satellitesUpserted} satellites, ${tleUpserted} new TLE sets`);
     

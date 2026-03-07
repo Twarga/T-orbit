@@ -44,12 +44,12 @@ Note: NASA APOD moved to post-MVP feature
 | CW-011 | Build satellite API endpoints | Backend | 3 | 5 | CW-007 | ✅ Done | (in apps/api/src/index.ts)
 | CW-012 | Build solar system API endpoints | Backend | 3 | 3 | CW-007 | ✅ Done | (in apps/api/src/index.ts)
 | CW-013 | Build metadata API endpoints | Backend | 3 | 3 | CW-007 | ✅ Done | (in apps/api/src/index.ts)
-| CW-014 | Bootstrap React + Cesium app | Frontend | 4 | 5 | CW-003 | |
-| CW-015 | Implement satellite rendering layer | Frontend | 4 | 8 | CW-014 | |
-| CW-016 | Implement Web Worker SGP4 propagation | Frontend | 4 | 5 | CW-015 | |
-| CW-017 | Implement ISS focus mode | Frontend | 4 | 3 | CW-015 | |
-| CW-018 | Build solar system navigator | Frontend | 4 | 5 | CW-012 | |
-| CW-019 | Build SME sidebar panel | Frontend | 4 | 3 | CW-013 | |
+| CW-014 | Bootstrap React + Cesium app | Frontend | 4 | 5 | CW-003 | ✅ Done |
+| CW-015 | Implement satellite rendering layer | Frontend | 4 | 8 | CW-014 | ✅ Done | (points, labels, ISS highlight)
+| CW-016 | Implement Web Worker SGP4 propagation | Frontend | 4 | 5 | CW-015 | ✅ Done |
+| CW-017 | Implement ISS focus mode | Frontend | 4 | 3 | CW-015 | ✅ Done | (focus button, camera fly-to, tracking indicator)
+| CW-018 | Build solar system navigator | Frontend | 4 | 5 | CW-012 | ✅ Done | (planet positions, distances, visualization)
+| CW-019 | Build SME sidebar panel | Frontend | 4 | 3 | CW-013 | ⏳ In Progress |
 | CW-020 | Configure Caddy for production | Fullstack | 4 | 3 | CW-010 | |
 | CW-021 | Deploy to VPS and verify | Fullstack | 4 | 3 | CW-020 | |
 
